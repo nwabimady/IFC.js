@@ -16,6 +16,7 @@
   "dependencies": {
     "cpy-cli": "^4.2.0",
     "three": "^0.135.0",
+    "web-ifc": "^0.0.36",
     "web-ifc-three": "^0.0.117",
     "web-ifc-viewer": "^1.0.213"
   }

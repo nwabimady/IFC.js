@@ -17,4 +17,7 @@ async function loadIfc() {
     viewer.context.renderer.postProduction.active = true;
 }
 
-loadIfc();
+loadIfc('../../../IFC/04.ifc');
+
+window.ondblclick = async () => await viewer.IFC.selector.pickIfcItem();
+window.onmousemove = async () => await viewer.IFC.selector.prePickIfcItem();

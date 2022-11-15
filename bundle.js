@@ -121841,3 +121841,6 @@ async function loadIfc() {
 }
 
 loadIfc();
+
+window.ondblclick = async () => await viewer.IFC.selector.pickIfcItem();
+window.onmousemove = async () => await viewer.IFC.selector.prePickIfcItem();
