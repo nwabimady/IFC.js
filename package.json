@@ -10,11 +10,13 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^13.0.2",
     "rollup": "^2.45.2"
   },
   "dependencies": {
     "cpy-cli": "^4.2.0",
+    "dxf-writer": "^1.18.4",
     "three": "^0.135.0",
     "web-ifc": "^0.0.36",
     "web-ifc-three": "^0.0.117",

@@ -1,119 +1,146 @@
-import {
-    AmbientLight,
-    AxesHelper,
-    DirectionalLight,
-    GridHelper,
-    PerspectiveCamera,
-    Scene,
-    Raycaster,
-    Vector2,
-    WebGLRenderer,
-} from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { IFCLoader } from "web-ifc-three/IFCLoader";
-import { IFCBUILDINGSTOREY } from "web-ifc";
-import {
-    acceleratedRaycast,
-    computeBoundsTree,
-    disposeBoundsTree
-} from 'three-mesh-bvh';
+import { Color, LineBasicMaterial, MeshBasicMaterial } from 'three';
+import { IfcViewerAPI } from 'web-ifc-viewer';
+import Drawing from 'dxf-writer';
 
-//Creates the Three.js scene
-const scene = new Scene();
+const container = document.getElementById('viewer-container');
+const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xf0faff) });
+viewer.grid.setGrid();
+viewer.axes.setAxes();
+init();
 
-//Object to store the size of the viewport
-const size = {
-    width: window.innerWidth,
-    height: window.innerHeight,
-};
+async function init() {
+	await viewer.IFC.setWasmPath('./');
+	const model = await viewer.IFC.loadIfcUrl('./04.ifc');
 
-//Creates the camera (point of view of the user)
-const camera = new PerspectiveCamera(75, size.width / size.height);
-camera.position.z = 15;
-camera.position.y = 13;
-camera.position.x = 8;
+	// Setup camera controls
+	const controls = viewer.context.ifcCamera.cameraControls;
+	controls.setPosition(7.6, 4.3, 24.8, false);
+	controls.setTarget(-7.1, -0.3, 2.5, false);
 
-//Creates the lights of the scene
-const lightColor = 0xffffff;
+	await viewer.plans.computeAllPlanViews(model.modelID);
 
-const ambientLight = new AmbientLight(lightColor, 0.5);
-scene.add(ambientLight);
+	const lineMaterial = new LineBasicMaterial({ color: 'black' });
+	const baseMaterial = new MeshBasicMaterial({
+		polygonOffset: true,
+		polygonOffsetFactor: 1, // positive value pushes polygon further away
+		polygonOffsetUnits: 1,
+	});
+	await viewer.edges.create('example', model.modelID, lineMaterial, baseMaterial);
 
-const directionalLight = new DirectionalLight(lightColor, 1);
-directionalLight.position.set(0, 10, 0);
-directionalLight.target.position.set(-5, 0, 0);
-scene.add(directionalLight);
-scene.add(directionalLight.target);
+	// Floor plan viewing
 
-//Sets up the renderer, fetching the canvas of the HTML
-const threeCanvas = document.getElementById("three-canvas");
-const renderer = new WebGLRenderer({canvas: threeCanvas, alpha: true});
-renderer.setSize(size.width, size.height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+	const allPlans = viewer.plans.getAll(model.modelID);
 
-//Creates grids and axes in the scene
-const grid = new GridHelper(50, 30);
-scene.add(grid);
+	const container = document.getElementById('button-container');
 
-const axes = new AxesHelper();
-axes.material.depthTest = false;
-axes.renderOrder = 1;
-scene.add(axes);
+	for (const plan of allPlans) {
+		const currentPlan = viewer.plans.planLists[model.modelID][plan];
+		console.log(currentPlan);
 
-//Creates the orbit controls (to navigate the scene)
-const controls = new OrbitControls(camera, threeCanvas);
-controls.enableDamping = true;
-controls.target.set(-2, 0, 0);
+		const button = document.createElement('button');
+		container.appendChild(button);
+		button.textContent = currentPlan.name;
+		button.onclick = () => {
+			viewer.plans.goTo(model.modelID, plan);
+			viewer.edges.toggle('example', true);
+		};
+	}
 
-//Animation loop
-const animate = () => {
-    controls.update();
-    renderer.render(scene, camera);
-    requestAnimationFrame(animate);
-};
+	const button = document.createElement('button');
+	container.appendChild(button);
+	button.textContent = 'Exit';
+	button.onclick = () => {
+		viewer.plans.exitPlanView();
+		viewer.edges.toggle('example', false);
+	};
 
-animate();
+	// Floor plan export
 
-//Adjust the viewport to the size of the browser
-window.addEventListener("resize", () => {
-    (size.width = window.innerWidth), (size.height = window.innerHeight);
-    camera.aspect = size.width / size.height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(size.width, size.height);
-});
+	viewer.dxf.initializeJSDXF(Drawing);
 
-//Sets up the IFC loading
-const ifcModels = [];
-const ifcLoader = new IFCLoader();
-ifcLoader.ifcManager.setWasmPath("./");
-ifcLoader.load("./04.ifc", (ifcModel) => {
-    ifcModels.push(ifcModel);
-    scene.add(ifcModel)
-});
+	const ifcProject = await viewer.IFC.getSpatialStructure(model.modelID);
+	const storeys = ifcProject.children[0].children[0].children;
+	for (let storey of storeys) {
+		for (let child of storey.children) {
+			if (child.children.length) {
+				storey.children.push(...child.children);
+			}
+		}
+	}
 
-async function edit(event) {
-    const manager = ifcLoader.ifcManager;
-    const storeysIDs = await manager.getAllItemsOfType(0, IFCBUILDINGSTOREY, false);
-    const storeyID = storeysIDs[0];
-    const storey =  await manager.getItemProperties(0, storeyID);
-    console.log(storey);
-    storey.LongName.value = "Nivel 1 - Editado";
-    manager.ifcAPI.WriteLine(0, storey);
+	for (const plan of allPlans) {
+		const currentPlan = viewer.plans.planLists[model.modelID][plan];
+		console.log(currentPlan);
 
-    const data = await manager.ifcAPI.ExportFileAsIFC(0);
-    const blob = new Blob([data]);
-    const file = new File([blob], "modified.ifc");
-
-    const link = document.createElement('a');
-    link.download = 'modified.ifc';
-    link.href = URL.createObjectURL(file);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+		const button = document.createElement('button');
+		container.appendChild(button);
+		button.textContent = 'Export ' + currentPlan.name;
+		button.onclick = () => {
+			const storey = storeys.find(storey => storey.expressID === currentPlan.expressID);
+			drawProjectedItems(storey, currentPlan, model.modelID);
+		};
+	}
 }
 
-window.onkeydown = (event) => {
-    if(event.code === 'KeyP') {
-        edit();
-    }
-};
+const dummySubsetMat = new MeshBasicMaterial({visible: false});
+
+async function drawProjectedItems(storey, plan, modelID) {
+
+	// Create a new drawing (if it doesn't exist)
+	if (!viewer.dxf.drawings[plan.name]) viewer.dxf.newDrawing(plan.name);
+
+	// Get the IDs of all the items to draw
+	const ids = storey.children.map(item => item.expressID);
+
+	// If no items to draw in this layer in this floor plan, let's continue
+	if (!ids.length) return;
+
+	// If there are items, extract its geometry
+	const subset = viewer.IFC.loader.ifcManager.createSubset({
+		modelID,
+		ids,
+		removePrevious: true,
+		customID: 'floor_plan_generation',
+		material: dummySubsetMat,
+	});
+
+	// Get the projection of the items in this floor plan
+	const filteredPoints = [];
+	const edges = await viewer.edgesProjector.projectEdges(subset);
+	const positions = edges.geometry.attributes.position.array;
+
+	// Lines shorter than this won't be rendered
+	const tolerance = 0.01;
+	for (let i = 0; i < positions.length - 5; i += 6) {
+
+		const a = positions[i] - positions[i + 3];
+		// Z coords are multiplied by -1 to match DXF Y coordinate
+		const b = -positions[i + 2] + positions[i + 5];
+
+		const distance = Math.sqrt(a * a + b * b);
+
+		if (distance > tolerance) {
+			filteredPoints.push([positions[i], -positions[i + 2], positions[i + 3], -positions[i + 5]]);
+		}
+
+	}
+
+	// Draw the projection of the items
+	viewer.dxf.drawEdges(plan.name, filteredPoints, 'Projection', Drawing.ACI.BLUE, 'CONTINUOUS');
+
+	// Clean up
+	edges.geometry.dispose();
+
+
+	// Draw all sectioned items
+		viewer.dxf.drawNamedLayer(plan.name, plan, 'thick', 'Section', Drawing.ACI.RED, 'CONTINUOUS');
+		viewer.dxf.drawNamedLayer(plan.name, plan, 'thin', 'Section_Secondary', Drawing.ACI.CYAN, 'CONTINUOUS');
+
+	const result = viewer.dxf.exportDXF(plan.name);
+	const link = document.createElement('a');
+	link.download = 'floorplan.dxf';
+	link.href = URL.createObjectURL(result);
+	document.body.appendChild(link);
+	link.click();
+	link.remove();
+}
