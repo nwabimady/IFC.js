@@ -8,69 +8,26 @@ html, body {
     overflow: hidden;
 }
 
-button {
-    position: absolute;
-    right: 0;
-}
-
-.table-container {
-    position: absolute;
-    max-height: 100vh;
-    background-color: rgba(0, 0, 0, 0.7);
-    overflow: scroll;
-    border-radius: 5px;
-}
-
-.table-container::-webkit-scrollbar {
-    width: 10px;
-    background-color: transparent;
-}
-
-.table-container::-webkit-scrollbar-thumb {
-    background-color: white;
-    border-radius: 5px;
-}
-
-.table-container::-webkit-scrollbar-track {
-    background-color: transparent;
-}
-
-#walls-table {
-    font-family: Arial, Helvetica, sans-serif;
-    border-collapse: collapse;
-    max-width: 30vw;
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    border-radius: 5px;
-}
-
-#walls-table td, #walls-table th {
-    border: 1px solid #ddd;
-    padding: 8px;
-}
-
-#walls-table tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.5);
-}
-
-#walls-table tr:hover {
-    background-color: rgba(0, 0, 0, 0.5);
-}
-
-#walls-table th {
-    padding-top: 12px;
-    padding-bottom: 12px;
-    text-align: left;
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    border-radius: 5px;
-}
-
-#viewer-container {
+#three-canvas{
     position: fixed;
     top: 0;
     left: 0;
     outline: none;
-    width: 100%;
-    height: 100%;
+}
+
+#button-container {
+    display: flex;
+    flex-direction: column;
+    margin: 4rem 1rem;
+}
+
+#file-input {
+    z-index: 1;
+
+}
+
+#memory-button {
+    width: 8rem;
+    margin-top: 1rem;
+    z-index: 1;
 }

@@ -1,75 +1,118 @@
-import { Color } from 'three';
-import { IfcViewerAPI } from 'web-ifc-viewer';
-import { IFCWALLSTANDARDCASE } from 'web-ifc';
+import {
+	AmbientLight,
+	AxesHelper,
+	DirectionalLight,
+	GridHelper,
+	PerspectiveCamera,
+	Scene,
+	WebGLRenderer,
+} from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { IFCLoader } from 'web-ifc-three/IFCLoader';
+import Stats from 'stats.js/src/Stats';
 
-const container = document.getElementById('viewer-container');
-const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xf0faff) });
-viewer.grid.setGrid();
-viewer.axes.setAxes();
-  
-async function loadIfc(url) {
-    await viewer.IFC.setWasmPath("./");
-    const model = await viewer.IFC.loadIfcUrl(url);
-    await viewer.shadowDropper.renderShadow(model.modelID);
+//Creates the Three.js scene
+const scene = new Scene();
 
-    const walls = await viewer.IFC.getAllItemsOfType(model.modelID, IFCWALLSTANDARDCASE, true);
+//Object to store the size of the viewport
+const size = {
+	width: window.innerWidth,
+	height: window.innerHeight,
+};
 
-    const table = document.getElementById('walls-table');
-    const body = table.querySelector('tbody');
-    for(const wall of walls) {
-        createWallNameEntry(body, wall);
+//Creates the camera (point of view of the user)
+const camera = new PerspectiveCamera(75, size.width / size.height);
+camera.position.z = 15;
+camera.position.y = 13;
+camera.position.x = 8;
 
-        for(let propertyName in wall) {
-            const propertyValue = wall[propertyName];
-            addPropertyEntry(body, propertyName, propertyValue);
-        }
-    }
+//Creates the lights of the scene
+const lightColor = 0xffffff;
 
-    const exportButton = document.getElementById('export');
-    exportButton.onclick = () => {
-        const book = XLSX.utils.table_to_book(table);
-        XLSX.writeFile(book, "SheetJSTable.xlsx");
-    }
+const ambientLight = new AmbientLight(lightColor, 0.5);
+scene.add(ambientLight);
+
+const directionalLight = new DirectionalLight(lightColor, 1);
+directionalLight.position.set(0, 10, 0);
+directionalLight.target.position.set(-5, 0, 0);
+scene.add(directionalLight);
+scene.add(directionalLight.target);
+
+//Sets up the renderer, fetching the canvas of the HTML
+const threeCanvas = document.getElementById('three-canvas');
+const renderer = new WebGLRenderer({ canvas: threeCanvas, alpha: true });
+renderer.setSize(size.width, size.height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+//Creates grids and axes in the scene
+const grid = new GridHelper(50, 30);
+scene.add(grid);
+
+const axes = new AxesHelper();
+axes.material.depthTest = false;
+axes.renderOrder = 1;
+scene.add(axes);
+
+//Creates the orbit controls (to navigate the scene)
+const controls = new OrbitControls(camera, threeCanvas);
+controls.enableDamping = true;
+controls.target.set(-2, 0, 0);
+
+// Stats
+const stats = new Stats();
+stats.showPanel(2);
+document.body.append(stats.dom);
+
+//Animation loop
+const animate = () => {
+	stats.begin();
+	controls.update();
+	renderer.render(scene, camera);
+	stats.end();
+	requestAnimationFrame(animate);
+};
+
+animate();
+
+//Adjust the viewport to the size of the browser
+window.addEventListener('resize', () => {
+	(size.width = window.innerWidth), (size.height = window.innerHeight);
+	camera.aspect = size.width / size.height;
+	camera.updateProjectionMatrix();
+	renderer.setSize(size.width, size.height);
+});
+
+const models = [];
+
+//Sets up the IFC loading
+let ifcLoader = new IFCLoader();
+ifcLoader.ifcManager.setWasmPath('../../../');
+
+const input = document.getElementById('file-input');
+input.addEventListener(
+	'change',
+	(changed) => {
+		const ifcURL = URL.createObjectURL(changed.target.files[0]);
+		ifcLoader.load(ifcURL, (ifcModel) => {
+			models.push(ifcModel);
+			scene.add(ifcModel);
+		});
+	},
+	false,
+);
+
+// Sets up memory disposal
+const button = document.getElementById('memory-button');
+button.addEventListener(`click`, () => releaseMemory());
+
+async function releaseMemory() {
+	  // This releases all IFCLoader memory
+		await ifcLoader.ifcManager.dispose();
+		ifcLoader = null;
+		ifcLoader = new IFCLoader();
+		await ifcLoader.ifcManager.setWasmPath('../../../');
+
+		// If you are storing the ifcmodels in an array or object, you must release them there as well
+		// Otherwise, they won't be garbage collected
+		models.length = 0;
 }
-
-function createWallNameEntry(table, wall) {
-    const row = document.createElement('tr');
-    table.appendChild(row);
-
-    const wallName = document.createElement('td');
-    wallName.colSpan = 2;
-    wallName.textContent = 'Wall ' + wall.GlobalId.value;
-    row.appendChild(wallName);
-}
-
-function addPropertyEntry(table, name, value) {
-    const row = document.createElement('tr');
-    table.appendChild(row);
-
-    const propertyName = document.createElement('td');
-    name = decodeIFCString(name);
-    propertyName.textContent = name;
-    row.appendChild(propertyName);
-
-    if(value === null || value === undefined) value = "Unknown";
-    if(value.value) value = value.value;
-    value = decodeIFCString(value);
-
-    const propertyValue = document.createElement('td');
-    propertyValue.textContent = value;
-    row.appendChild(propertyValue);
-}
-
-function decodeIFCString (ifcString) {
-    const ifcUnicodeRegEx = /\\X2\\(.*?)\\X0\\/uig;
-    let resultString = ifcString;
-    let match = ifcUnicodeRegEx.exec (ifcString);
-    while (match) {
-        const unicodeChar = String.fromCharCode (parseInt (match[1], 16));
-        resultString = resultString.replace (match[0], unicodeChar);
-        match = ifcUnicodeRegEx.exec (ifcString);
-    }
-    return resultString;
-}
-
-loadIfc('./04.ifc');
