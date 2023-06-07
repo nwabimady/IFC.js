@@ -121824,10 +121824,6 @@ class IfcViewerAPI {
     }
 }
 
-function getDefaultExportFromCjs (x) {
-	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
-}
-
 class Handle$3 {
     static seed = 0;
 
@@ -122817,7 +122813,7 @@ const Ellipse = Ellipse_1;
 const TagsManager = TagsManager_1;
 const Handle = Handle_1;
 
-class Drawing$1 {
+class Drawing {
     constructor() {
         this.layers = {};
         this.activeLayer = null;
@@ -122830,11 +122826,11 @@ class Drawing$1 {
 
         this.setUnits("Unitless");
 
-        for (const ltype of Drawing$1.LINE_TYPES) {
+        for (const ltype of Drawing.LINE_TYPES) {
             this.addLineType(ltype.name, ltype.description, ltype.elements);
         }
 
-        for (const l of Drawing$1.LAYERS) {
+        for (const l of Drawing.LAYERS) {
             this.addLayer(l.name, l.colorNumber, l.lineTypeName);
         }
 
@@ -123198,10 +123194,10 @@ class Drawing$1 {
      * @param {string} unit see Drawing.UNITS
      */
     setUnits(unit) {
-        typeof Drawing$1.UNITS[unit] != "undefined"
-                ? Drawing$1.UNITS[unit]
-                : Drawing$1.UNITS["Unitless"];
-        this.header("INSUNITS", [[70, Drawing$1.UNITS[unit]]]);
+        typeof Drawing.UNITS[unit] != "undefined"
+                ? Drawing.UNITS[unit]
+                : Drawing.UNITS["Unitless"];
+        this.header("INSUNITS", [[70, Drawing.UNITS[unit]]]);
         return this;
     }
 
@@ -123336,7 +123332,7 @@ class Drawing$1 {
 
 //AutoCAD Color Index (ACI)
 //http://sub-atomic.com/~moses/acadcolors.html
-Drawing$1.ACI = {
+Drawing.ACI = {
     LAYER: 0,
     RED: 1,
     YELLOW: 2,
@@ -123347,18 +123343,18 @@ Drawing$1.ACI = {
     WHITE: 7,
 };
 
-Drawing$1.LINE_TYPES = [
+Drawing.LINE_TYPES = [
     { name: "CONTINUOUS", description: "______", elements: [] },
     { name: "DASHED", description: "_ _ _ ", elements: [5.0, -5.0] },
     { name: "DOTTED", description: ". . . ", elements: [0.0, -5.0] },
 ];
 
-Drawing$1.LAYERS = [
-    { name: "0", colorNumber: Drawing$1.ACI.WHITE, lineTypeName: "CONTINUOUS" },
+Drawing.LAYERS = [
+    { name: "0", colorNumber: Drawing.ACI.WHITE, lineTypeName: "CONTINUOUS" },
 ];
 
 //https://www.autodesk.com/techpubs/autocad/acad2000/dxf/header_section_group_codes_dxf_02.htm
-Drawing$1.UNITS = {
+Drawing.UNITS = {
     Unitless: 0,
     Inches: 1,
     Feet: 2,
@@ -123382,12 +123378,6 @@ Drawing$1.UNITS = {
     Parsecs: 20,
 };
 
-var Drawing_1 = Drawing$1;
-
-var dxfWriter = Drawing_1;
-
-var Drawing = /*@__PURE__*/getDefaultExportFromCjs(dxfWriter);
-
 const container = document.getElementById('viewer-container');
 const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xf0faff) });
 viewer.grid.setGrid();
@@ -123396,137 +123386,18 @@ init();
 
 async function init() {
 	await viewer.IFC.setWasmPath('./');
-	const model = await viewer.IFC.loadIfcUrl('./04.ifc');
+	await viewer.IFC.loadIfcUrl('./04.ifc');
 
-	// Setup camera controls
-	const controls = viewer.context.ifcCamera.cameraControls;
-	controls.setPosition(7.6, 4.3, 24.8, false);
-	controls.setTarget(-7.1, -0.3, 2.5, false);
+    viewer.dimensions.active = true;
+    viewer.dimensions.previewActive = true;
 
-	await viewer.plans.computeAllPlanViews(model.modelID);
+    window.ondblclick = () => {
+        viewer.dimensions.create();
+    };
 
-	const lineMaterial = new LineBasicMaterial({ color: 'black' });
-	const baseMaterial = new MeshBasicMaterial({
-		polygonOffset: true,
-		polygonOffsetFactor: 1, // positive value pushes polygon further away
-		polygonOffsetUnits: 1,
-	});
-	await viewer.edges.create('example', model.modelID, lineMaterial, baseMaterial);
-
-	// Floor plan viewing
-
-	const allPlans = viewer.plans.getAll(model.modelID);
-
-	const container = document.getElementById('button-container');
-
-	for (const plan of allPlans) {
-		const currentPlan = viewer.plans.planLists[model.modelID][plan];
-		console.log(currentPlan);
-
-		const button = document.createElement('button');
-		container.appendChild(button);
-		button.textContent = currentPlan.name;
-		button.onclick = () => {
-			viewer.plans.goTo(model.modelID, plan);
-			viewer.edges.toggle('example', true);
-		};
-	}
-
-	const button = document.createElement('button');
-	container.appendChild(button);
-	button.textContent = 'Exit';
-	button.onclick = () => {
-		viewer.plans.exitPlanView();
-		viewer.edges.toggle('example', false);
-	};
-
-	// Floor plan export
-
-	viewer.dxf.initializeJSDXF(Drawing);
-
-	const ifcProject = await viewer.IFC.getSpatialStructure(model.modelID);
-	const storeys = ifcProject.children[0].children[0].children;
-	for (let storey of storeys) {
-		for (let child of storey.children) {
-			if (child.children.length) {
-				storey.children.push(...child.children);
-			}
-		}
-	}
-
-	for (const plan of allPlans) {
-		const currentPlan = viewer.plans.planLists[model.modelID][plan];
-		console.log(currentPlan);
-
-		const button = document.createElement('button');
-		container.appendChild(button);
-		button.textContent = 'Export ' + currentPlan.name;
-		button.onclick = () => {
-			const storey = storeys.find(storey => storey.expressID === currentPlan.expressID);
-			drawProjectedItems(storey, currentPlan, model.modelID);
-		};
-	}
-}
-
-const dummySubsetMat = new MeshBasicMaterial({visible: false});
-
-async function drawProjectedItems(storey, plan, modelID) {
-
-	// Create a new drawing (if it doesn't exist)
-	if (!viewer.dxf.drawings[plan.name]) viewer.dxf.newDrawing(plan.name);
-
-	// Get the IDs of all the items to draw
-	const ids = storey.children.map(item => item.expressID);
-
-	// If no items to draw in this layer in this floor plan, let's continue
-	if (!ids.length) return;
-
-	// If there are items, extract its geometry
-	const subset = viewer.IFC.loader.ifcManager.createSubset({
-		modelID,
-		ids,
-		removePrevious: true,
-		customID: 'floor_plan_generation',
-		material: dummySubsetMat,
-	});
-
-	// Get the projection of the items in this floor plan
-	const filteredPoints = [];
-	const edges = await viewer.edgesProjector.projectEdges(subset);
-	const positions = edges.geometry.attributes.position.array;
-
-	// Lines shorter than this won't be rendered
-	const tolerance = 0.01;
-	for (let i = 0; i < positions.length - 5; i += 6) {
-
-		const a = positions[i] - positions[i + 3];
-		// Z coords are multiplied by -1 to match DXF Y coordinate
-		const b = -positions[i + 2] + positions[i + 5];
-
-		const distance = Math.sqrt(a * a + b * b);
-
-		if (distance > tolerance) {
-			filteredPoints.push([positions[i], -positions[i + 2], positions[i + 3], -positions[i + 5]]);
-		}
-
-	}
-
-	// Draw the projection of the items
-	viewer.dxf.drawEdges(plan.name, filteredPoints, 'Projection', Drawing.ACI.BLUE, 'CONTINUOUS');
-
-	// Clean up
-	edges.geometry.dispose();
-
-
-	// Draw all sectioned items
-		viewer.dxf.drawNamedLayer(plan.name, plan, 'thick', 'Section', Drawing.ACI.RED, 'CONTINUOUS');
-		viewer.dxf.drawNamedLayer(plan.name, plan, 'thin', 'Section_Secondary', Drawing.ACI.CYAN, 'CONTINUOUS');
-
-	const result = viewer.dxf.exportDXF(plan.name);
-	const link = document.createElement('a');
-	link.download = 'floorplan.dxf';
-	link.href = URL.createObjectURL(result);
-	document.body.appendChild(link);
-	link.click();
-	link.remove();
+    window.onkeydown = (event) => {
+        if(event.code === 'Delete') {
+            viewer.dimensions.delete();
+        }
+    };
 }
