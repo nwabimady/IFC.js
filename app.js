@@ -1,22 +1,30 @@
 import {
-	AmbientLight,
-	AxesHelper,
-	DirectionalLight,
-	GridHelper,
-	PerspectiveCamera,
-	Scene,
-	WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { IFCLoader } from 'web-ifc-three/IFCLoader';
+    AmbientLight,
+    AxesHelper,
+    DirectionalLight,
+    GridHelper,
+    PerspectiveCamera,
+    Scene,
+    Raycaster,
+    Vector2,
+    WebGLRenderer,
+} from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { IFCLoader } from "web-ifc-three/IFCLoader";
+import { IFCBUILDINGSTOREY } from "web-ifc";
+import {
+    acceleratedRaycast,
+    computeBoundsTree,
+    disposeBoundsTree
+} from 'three-mesh-bvh';
 
 //Creates the Three.js scene
 const scene = new Scene();
 
 //Object to store the size of the viewport
 const size = {
-	width: window.innerWidth,
-	height: window.innerHeight,
+    width: window.innerWidth,
+    height: window.innerHeight,
 };
 
 //Creates the camera (point of view of the user)
@@ -26,7 +34,7 @@ camera.position.y = 13;
 camera.position.x = 8;
 
 //Creates the lights of the scene
-const lightColor = 0xf0faff;
+const lightColor = 0xffffff;
 
 const ambientLight = new AmbientLight(lightColor, 0.5);
 scene.add(ambientLight);
@@ -38,8 +46,8 @@ scene.add(directionalLight);
 scene.add(directionalLight.target);
 
 //Sets up the renderer, fetching the canvas of the HTML
-const threeCanvas = document.getElementById('three-canvas');
-const renderer = new WebGLRenderer({ canvas: threeCanvas, alpha: true });
+const threeCanvas = document.getElementById("three-canvas");
+const renderer = new WebGLRenderer({canvas: threeCanvas, alpha: true});
 renderer.setSize(size.width, size.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -59,47 +67,53 @@ controls.target.set(-2, 0, 0);
 
 //Animation loop
 const animate = () => {
-	controls.update();
-	renderer.render(scene, camera);
-	requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
 };
 
 animate();
 
 //Adjust the viewport to the size of the browser
-window.addEventListener('resize', () => {
-	(size.width = window.innerWidth), (size.height = window.innerHeight);
-	camera.aspect = size.width / size.height;
-	camera.updateProjectionMatrix();
-	renderer.setSize(size.width, size.height);
+window.addEventListener("resize", () => {
+    (size.width = window.innerWidth), (size.height = window.innerHeight);
+    camera.aspect = size.width / size.height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(size.width, size.height);
 });
 
 //Sets up the IFC loading
+const ifcModels = [];
 const ifcLoader = new IFCLoader();
+ifcLoader.ifcManager.setWasmPath("./");
+ifcLoader.load("./04.ifc", (ifcModel) => {
+    ifcModels.push(ifcModel);
+    scene.add(ifcModel)
+});
 
-const input = document.getElementById('file-input');
-input.addEventListener(
-	'change',
-	(changed) => {
-		const ifcURL = URL.createObjectURL(changed.target.files[0]);
-		ifcLoader.load(ifcURL, (ifcModel) => scene.add(ifcModel));
-	},
-	false,
-);
+async function edit(event) {
+    const manager = ifcLoader.ifcManager;
+    const storeysIDs = await manager.getAllItemsOfType(0, IFCBUILDINGSTOREY, false);
+    const storeyID = storeysIDs[0];
+    const storey =  await manager.getItemProperties(0, storeyID);
+    console.log(storey);
+    storey.LongName.value = "Nivel 1 - Editado";
+    manager.ifcAPI.WriteLine(0, storey);
 
-async function setUpMultiThreading() {
-	await ifcLoader.ifcManager.useWebWorkers(true, 'IFCWorker.js');
-	await ifcLoader.ifcManager.setWasmPath('./');
+    const data = await manager.ifcAPI.ExportFileAsIFC(0);
+    const blob = new Blob([data]);
+    const file = new File([blob], "modified.ifc");
+
+    const link = document.createElement('a');
+    link.download = 'modified.ifc';
+    link.href = URL.createObjectURL(file);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 }
 
-setUpMultiThreading();
-
-function setupProgressNotification() {
-	const progressText = document.getElementById('progress-text');
-	ifcLoader.ifcManager.setOnProgress((event) => {
-		const result = Math.trunc(event.loaded / event.total * 100);
-		progressText.innerText = result.toString();
-	});
-}
-
-setupProgressNotification();
+window.onkeydown = (event) => {
+    if(event.code === 'KeyP') {
+        edit();
+    }
+};
