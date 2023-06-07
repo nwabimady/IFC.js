@@ -1,4 +1,4 @@
-* {
+*{
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -8,31 +8,82 @@ html, body {
     overflow: hidden;
 }
 
-.ifc-property-menu {
-    border: 1px solid gray;
-    width: 20rem;
+/*Tree view: https://www.w3schools.com/howto/howto_js_treeview.asp*/
+
+.ifc-tree-menu {
     position: absolute;
-    background-color: rgba(0, 0, 0, 0.7);
+    overflow-y: scroll;
+    background-color: rgba(37, 37, 37, 0.5);
+    height: 100vh;
     color: white;
+    text-align: center;
     border-radius: 5px;
-    cursor: grab;
 }
 
-.ifc-property-menu:hover {
-    cursor: grabbing;
+.ifc-tree-menu:hover {
+    background-color:  rgba(37, 37, 37, 0.5);
 }
 
-.ifc-property-item {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    padding: 0.5rem;
-    border-bottom: solid 1px gray;
+/* Customize the scrollbar */
+.ifc-tree-menu::-webkit-scrollbar {
+    width: 10px;
+    background-color: transparent;
 }
 
-.ifc-property-value {
-    width: 100%;
-    text-align: right;
+.ifc-tree-menu::-webkit-scrollbar-thumb {
+    background-color: white;
+    border-radius: 5px;
+}
+
+.ifc-tree-menu::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+
+li ul {
+    user-select: none;
+    cursor: pointer;
+}
+
+/* Remove default bullets */
+ul, #myUL {
+    list-style-type: none;
+}
+
+/* Remove margins and padding from the parent ul */
+#myUL {
+    margin: 0.5rem;
+    padding: 0;
+}
+
+/* Style the caret/arrow */
+.caret {
+    cursor: pointer;
+    user-select: none; /* Prevent text selection */
+}
+
+/* Create the caret/arrow with a unicode, and style it */
+.caret::before {
+    content: "\25B6";
+    color: black;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+/* Rotate the caret/arrow icon when clicked on (using JavaScript) */
+.caret-down::before {
+    transform: rotate(90deg);
+}
+
+/* Hide the nested list */
+.nested {
+    display: none;
+}
+
+/* Show the nested list when the user clicks on the caret/arrow (with JavaScript) */
+.active {
+    display: block;
+    margin-left: 10px;
 }
 
 #viewer-container {

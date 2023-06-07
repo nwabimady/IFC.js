@@ -121834,61 +121834,86 @@ async function loadIfc(url) {
     const model = await viewer.IFC.loadIfcUrl(url);
     await viewer.shadowDropper.renderShadow(model.modelID);
     viewer.context.renderer.postProduction.active = true;
+
+    const ifcProject = await viewer.IFC.getSpatialStructure(model.modelID);
+    createTreeMenu(ifcProject);
 }
 
 loadIfc('./04.ifc');
 
-// Properties menu
+// Tree view
 
-window.onmousemove = () => viewer.IFC.selector.prePickIfcItem();
-
-window.ondblclick = async () => {
-    const result = await viewer.IFC.selector.highlightIfcItem();
-    if (!result) return;
-    const { modelID, id } = result;
-    const props = await viewer.IFC.getProperties(modelID, id, true, false);
-    createPropertiesMenu(props);
-};
-
-const propsGUI = document.getElementById("ifc-property-menu-root");
-
-function createPropertiesMenu(properties) {
-    console.log(properties);
-
-    removeAllChildren(propsGUI);
-
-    properties.psets;
-    properties.mats;
-    properties.type;
-
-    delete properties.psets;
-    delete properties.mats;
-    delete properties.type;
-
-
-    for (let key in properties) {
-        createPropertyEntry(key, properties[key]);
-    }
-
+const toggler = document.getElementsByClassName("caret");
+for (let i = 0; i < toggler.length; i++) {
+    toggler[i].onclick = () => {
+        toggler[i].parentElement.querySelector(".nested").classList.toggle("active");
+        toggler[i].classList.toggle("caret-down");
+    };
 }
 
-function createPropertyEntry(key, value) {
-    const propContainer = document.createElement("div");
-    propContainer.classList.add("ifc-property-item");
+// Spatial tree menu
 
-    if(value === null || value === undefined) value = "undefined";
-    else if(value.value) value = value.value;
+function createTreeMenu(ifcProject) {
+    const root = document.getElementById("tree-root");
+    removeAllChildren(root);
+    const ifcProjectNode = createNestedChild(root, ifcProject);
+    ifcProject.children.forEach(child => {
+        constructTreeMenuNode(ifcProjectNode, child);
+    });
+}
 
-    const keyElement = document.createElement("div");
-    keyElement.textContent = key;
-    propContainer.appendChild(keyElement);
+function nodeToString(node) {
+    return `${node.type} - ${node.expressID}`
+}
 
-    const valueElement = document.createElement("div");
-    valueElement.classList.add("ifc-property-value");
-    valueElement.textContent = value;
-    propContainer.appendChild(valueElement);
+function constructTreeMenuNode(parent, node) {
+    const children = node.children;
+    if (children.length === 0) {
+        createSimpleChild(parent, node);
+        return;
+    }
+    const nodeElement = createNestedChild(parent, node);
+    children.forEach(child => {
+        constructTreeMenuNode(nodeElement, child);
+    });
+}
 
-    propsGUI.appendChild(propContainer);
+function createNestedChild(parent, node) {
+    const content = nodeToString(node);
+    const root = document.createElement('li');
+    createTitle(root, content);
+    const childrenContainer = document.createElement('ul');
+    childrenContainer.classList.add("nested");
+    root.appendChild(childrenContainer);
+    parent.appendChild(root);
+    return childrenContainer;
+}
+
+function createTitle(parent, content) {
+    const title = document.createElement("span");
+    title.classList.add("caret");
+    title.onclick = () => {
+        title.parentElement.querySelector(".nested").classList.toggle("active");
+        title.classList.toggle("caret-down");
+    };
+    title.textContent = content;
+    parent.appendChild(title);
+}
+
+function createSimpleChild(parent, node) {
+    const content = nodeToString(node);
+    const childNode = document.createElement('li');
+    childNode.classList.add('leaf-node');
+    childNode.textContent = content;
+    parent.appendChild(childNode);
+
+    childNode.onmouseenter = () => {
+        viewer.IFC.selector.prepickIfcItemsByID(0, [node.expressID]);
+    };
+
+    childNode.onclick = async () => {
+        viewer.IFC.selector.pickIfcItemsByID(0, [node.expressID]);
+    };
 }
 
 function removeAllChildren(element) {
