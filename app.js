@@ -1,100 +1,81 @@
-import { Color } from 'three';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 
-const container = document.getElementById('viewer-container');
-const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xf0faff) });
-viewer.grid.setGrid();
-viewer.axes.setAxes();
+main();
 
-async function loadIfc(url) {
-    await viewer.IFC.setWasmPath("./");
-    const model = await viewer.IFC.loadIfcUrl(url);
-    await viewer.shadowDropper.renderShadow(model.modelID);
-    viewer.context.renderer.postProduction.active = true;
-
-    const ifcProject = await viewer.IFC.getSpatialStructure(model.modelID);
-    createTreeMenu(ifcProject);
+async function main() {
+	const viewer = await setupScene();
+	const ifcModel = await viewer.IFC.loadIfcUrl('./04.ifc');
+	const allIDs = getAllIds(ifcModel);
+	const subset = getWholeSubset(viewer, ifcModel, allIDs);
+	replaceOriginalModelBySubset(viewer, ifcModel, subset);
+	setupEvents(viewer, allIDs);
 }
 
-loadIfc('./04.ifc');
-
-// Tree view
-
-const toggler = document.getElementsByClassName("caret");
-for (let i = 0; i < toggler.length; i++) {
-    toggler[i].onclick = () => {
-        toggler[i].parentElement.querySelector(".nested").classList.toggle("active");
-        toggler[i].classList.toggle("caret-down");
-    }
+function setupEvents(viewer, allIDs) {
+	window.ondblclick = () => hideClickedItem(viewer);
+	window.onkeydown = (event) => {
+		if (event.code === 'Escape') {
+			showAllItems(viewer, allIDs);
+		}
+	};
 }
 
-// Spatial tree menu
-
-function createTreeMenu(ifcProject) {
-    const root = document.getElementById("tree-root");
-    removeAllChildren(root);
-    const ifcProjectNode = createNestedChild(root, ifcProject);
-    ifcProject.children.forEach(child => {
-        constructTreeMenuNode(ifcProjectNode, child);
-    })
+function getAllIds(ifcModel) {
+	return Array.from(
+		new Set(ifcModel.geometry.attributes.expressID.array),
+	);
 }
 
-function nodeToString(node) {
-    return `${node.type} - ${node.expressID}`
+function replaceOriginalModelBySubset(viewer, ifcModel, subset) {
+	const items = viewer.context.items;
+
+	items.pickableIfcModels = items.pickableIfcModels.filter(model => model !== ifcModel);
+	items.ifcModels = items.ifcModels.filter(model => model !== ifcModel);
+	ifcModel.removeFromParent();
+
+	items.ifcModels.push(subset);
+	items.pickableIfcModels.push(subset);
 }
 
-function constructTreeMenuNode(parent, node) {
-    const children = node.children;
-    if (children.length === 0) {
-        createSimpleChild(parent, node);
-        return;
-    }
-    const nodeElement = createNestedChild(parent, node);
-    children.forEach(child => {
-        constructTreeMenuNode(nodeElement, child);
-    })
+function getWholeSubset(viewer, ifcModel, allIDs) {
+	return viewer.IFC.loader.ifcManager.createSubset({
+		modelID: ifcModel.modelID,
+		ids: allIDs,
+		applyBVH: true,
+		scene: ifcModel.parent,
+		removePrevious: true,
+		customID: 'full-model-subset',
+	});
 }
 
-function createNestedChild(parent, node) {
-    const content = nodeToString(node);
-    const root = document.createElement('li');
-    createTitle(root, content);
-    const childrenContainer = document.createElement('ul');
-    childrenContainer.classList.add("nested");
-    root.appendChild(childrenContainer);
-    parent.appendChild(root);
-    return childrenContainer;
+async function setupScene() {
+	const container = document.getElementById('viewer-container');
+	const viewer = new IfcViewerAPI({ container });
+	viewer.grid.setGrid();
+	viewer.axes.setAxes();
+	await viewer.IFC.setWasmPath('./');
+	return viewer;
 }
 
-function createTitle(parent, content) {
-    const title = document.createElement("span");
-    title.classList.add("caret");
-    title.onclick = () => {
-        title.parentElement.querySelector(".nested").classList.toggle("active");
-        title.classList.toggle("caret-down");
-    }
-    title.textContent = content;
-    parent.appendChild(title);
+function showAllItems(viewer, ids) {
+	viewer.IFC.loader.ifcManager.createSubset({
+		modelID: 0,
+		ids,
+		removePrevious: false,
+		applyBVH: true,
+		customID: 'full-model-subset',
+	});
 }
 
-function createSimpleChild(parent, node) {
-    const content = nodeToString(node);
-    const childNode = document.createElement('li');
-    childNode.classList.add('leaf-node');
-    childNode.textContent = content;
-    parent.appendChild(childNode);
-
-    childNode.onmouseenter = () => {
-        viewer.IFC.selector.prepickIfcItemsByID(0, [node.expressID]);
-    }
-
-    childNode.onclick = async () => {
-        viewer.IFC.selector.pickIfcItemsByID(0, [node.expressID]);
-    }
+function hideClickedItem(viewer) {
+	const result = viewer.context.castRayIfc();
+	if (!result) return;
+	const manager = viewer.IFC.loader.ifcManager;
+	const id = manager.getExpressId(result.object.geometry, result.faceIndex);
+	viewer.IFC.loader.ifcManager.removeFromSubset(
+		0,
+		[id],
+		'full-model-subset',
+	);
 }
 
-function removeAllChildren(element) {
-    while (element.firstChild) {
-        element.removeChild(element.firstChild);
-    }
-}
