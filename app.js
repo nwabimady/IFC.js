@@ -9,6 +9,24 @@ init();
 
 async function init() {
     await viewer.IFC.setWasmPath('./');
-    await viewer.IFC.loadIfcUrl('./04.ifc');
-    await viewer.GLTF.load('./police_station.glb');
+    const model = await viewer.IFC.loadIfcUrl('./04.ifc');
+
+
+	// Serialize properties
+	const result = await viewer.IFC.properties.serializeAllProperties(model, undefined, (current, total) => {
+		const progress = current / total;
+		const formatted = Math.trunc(progress * 100);
+		console.log(formatted + '%');
+	});
+
+	// Download the properties as JSON file
+	const file = new File(result, 'properties');
+
+	const link = document.createElement('a');
+	document.body.appendChild(link);
+	link.href = URL.createObjectURL(file);
+	link.download = 'properties.json';
+	link.click();
+	link.remove();
+
 }
