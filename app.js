@@ -5,12 +5,11 @@ import {
     GridHelper,
     PerspectiveCamera,
     Scene,
-    MeshLambertMaterial,
     Raycaster,
     Vector2,
     WebGLRenderer,
 } from "three";
-import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {IFCLoader} from "web-ifc-three/IFCLoader";
 import {
     acceleratedRaycast,
@@ -87,13 +86,14 @@ const ifcModels = [];
 const ifcLoader = new IFCLoader();
 
 async function loadIFC() {
-    await ifcLoader.ifcManager.setWasmPath("../../../");
-    const model = await ifcLoader.loadAsync("../../../IFC/01.ifc");
+    await ifcLoader.ifcManager.setWasmPath("./");
+    const model = await ifcLoader.loadAsync("./04.ifc");
     scene.add(model);
     ifcModels.push(model);
 }
 
 loadIFC();
+
 
 // Sets up optimized picking
 ifcLoader.ifcManager.setupThreeMeshBVH(
@@ -125,52 +125,39 @@ function cast(event) {
     return raycaster.intersectObjects(ifcModels);
 }
 
-// Creates subset materials
-const preselectMat = new MeshLambertMaterial({
-    transparent: true,
-    opacity: 0.6,
-    color: 0xff88ff,
-    depthTest: false
-})
+const output = document.getElementById("id-output");
 
-const selectMat = new MeshLambertMaterial({
-    transparent: true,
-    opacity: 0.6,
-    color: 0xff00ff,
-    depthTest: false
-})
-
-const ifc = ifcLoader.ifcManager;
-// References to the previous selections
-const highlightModel = { id: - 1};
-const selectModel = { id: - 1};
-
-function highlight(event, material, model, multiple = true) {
+// Event that gets executed when an item is picked
+async function pick(event) {
     const found = cast(event)[0];
     if (found) {
-
-        // Gets model ID
-        model.id = found.object.modelID;
-
-        // Gets Express ID
         const index = found.faceIndex;
         const geometry = found.object.geometry;
+        const ifc = ifcLoader.ifcManager;
         const id = ifc.getExpressId(geometry, index);
+        const modelID = found.object.modelID;
+        const props = await ifc.getItemProperties(modelID, id);
 
-        // Creates subset
-        ifcLoader.ifcManager.createSubset({
-            modelID: model.id,
-            ids: [id],
-            material: material,
-            scene: scene,
-            removePrevious: multiple
-        })
-    } else {
-        // Remove previous highlight
-        ifc.removeSubset(model.id, scene, material);
+        if(getProps) {
+            const Props = await Loader.ifcManager.getItemProperties(found.object.modelID, id);
+            console.log(props);
+            const psets = await Loader.ifcManager.getPropertySets(found.object.modelID, id);
+            console.log(psets);
+            
+            for(const psets of psets) {
+                const realValues = [];
+         
+                
+                for(const prop of psets.HasProperties) {
+                    const id = prop.value;
+                    const value = await Loader.ifcManager.getItemProperties(found.object.modelID, id);
+                    realValues.push(value);
+           
+            }
+            psets.HasProperties = realValues;
+        }
     }
+
 }
-
-window.onmousemove = (event) => highlight(event, preselectMat, highlightModel);
-
-window.ondblclick = (event) => highlight(event, selectMat, selectModel);
+window.ondblclick = pick;
+}
