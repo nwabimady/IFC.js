@@ -1,118 +1,151 @@
-import {
-	AmbientLight,
-	AxesHelper,
-	DirectionalLight,
-	GridHelper,
-	PerspectiveCamera,
-	Scene,
-	WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { IFCLoader } from 'web-ifc-three/IFCLoader';
-import Stats from 'stats.js/src/Stats';
-
-//Creates the Three.js scene
-const scene = new Scene();
-
-//Object to store the size of the viewport
-const size = {
-	width: window.innerWidth,
-	height: window.innerHeight,
-};
-
-//Creates the camera (point of view of the user)
-const camera = new PerspectiveCamera(75, size.width / size.height);
-camera.position.z = 15;
-camera.position.y = 13;
-camera.position.x = 8;
-
-//Creates the lights of the scene
-const lightColor = 0xffffff;
-
-const ambientLight = new AmbientLight(lightColor, 0.5);
-scene.add(ambientLight);
-
-const directionalLight = new DirectionalLight(lightColor, 1);
-directionalLight.position.set(0, 10, 0);
-directionalLight.target.position.set(-5, 0, 0);
-scene.add(directionalLight);
-scene.add(directionalLight.target);
-
-//Sets up the renderer, fetching the canvas of the HTML
-const threeCanvas = document.getElementById('three-canvas');
-const renderer = new WebGLRenderer({ canvas: threeCanvas, alpha: true });
-renderer.setSize(size.width, size.height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-//Creates grids and axes in the scene
-const grid = new GridHelper(50, 30);
-scene.add(grid);
-
-const axes = new AxesHelper();
-axes.material.depthTest = false;
-axes.renderOrder = 1;
-scene.add(axes);
-
-//Creates the orbit controls (to navigate the scene)
-const controls = new OrbitControls(camera, threeCanvas);
-controls.enableDamping = true;
-controls.target.set(-2, 0, 0);
-
-// Stats
-const stats = new Stats();
-stats.showPanel(2);
-document.body.append(stats.dom);
-
-//Animation loop
-const animate = () => {
-	stats.begin();
-	controls.update();
-	renderer.render(scene, camera);
-	stats.end();
-	requestAnimationFrame(animate);
-};
-
-animate();
-
-//Adjust the viewport to the size of the browser
-window.addEventListener('resize', () => {
-	(size.width = window.innerWidth), (size.height = window.innerHeight);
-	camera.aspect = size.width / size.height;
-	camera.updateProjectionMatrix();
-	renderer.setSize(size.width, size.height);
-});
-
-const models = [];
-
-//Sets up the IFC loading
-let ifcLoader = new IFCLoader();
-ifcLoader.ifcManager.setWasmPath('../../../');
-
-const input = document.getElementById('file-input');
-input.addEventListener(
-	'change',
-	(changed) => {
-		const ifcURL = URL.createObjectURL(changed.target.files[0]);
-		ifcLoader.load(ifcURL, (ifcModel) => {
-			models.push(ifcModel);
-			scene.add(ifcModel);
-		});
-	},
-	false,
-);
-
-// Sets up memory disposal
-const button = document.getElementById('memory-button');
-button.addEventListener(`click`, () => releaseMemory());
-
-async function releaseMemory() {
-	  // This releases all IFCLoader memory
-		await ifcLoader.ifcManager.dispose();
-		ifcLoader = null;
-		ifcLoader = new IFCLoader();
-		await ifcLoader.ifcManager.setWasmPath('../../../');
-
-		// If you are storing the ifcmodels in an array or object, you must release them there as well
-		// Otherwise, they won't be garbage collected
-		models.length = 0;
-}
+import { Matrix4, Vector3,
+    PerspectiveCamera,
+    DirectionalLight,
+    AmbientLight,
+    Scene, WebGLRenderer,
+  } from "three";
+  
+  import { IFCLoader } from "web-ifc-three";
+  
+  mapboxgl.accessToken = 'pk.eyJ1IjoibndhYmlzYW0iLCJhIjoiY2o0ZzR5MmtiMDAxYzJxczBydjJvdjdwZSJ9.DCsig0leVaLwmOt7Unu6bQ';
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/light-v10',
+    zoom: 20.5,
+    center: [13.4453, 52.4910],
+    pitch: 75,
+    bearing: -80,
+    antialias: true
+  });
+  
+  const modelOrigin = [13.4453, 52.4910];
+  const modelAltitude = 0;
+  const modelRotate = [Math.PI / 2, .72, 0];
+   
+  const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(modelOrigin, modelAltitude);
+   
+  const modelTransform = {
+    translateX: modelAsMercatorCoordinate.x,
+    translateY: modelAsMercatorCoordinate.y,
+    translateZ: modelAsMercatorCoordinate.z,
+    rotateX: modelRotate[0],
+    rotateY: modelRotate[1],
+    rotateZ: modelRotate[2],
+    scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
+  };
+   
+  const scene = new Scene();
+  const camera = new PerspectiveCamera();
+  const renderer = new WebGLRenderer({
+    canvas: map.getCanvas(),
+    antialias: true,
+  });
+  renderer.autoClear = false;
+  
+  const customLayer = {
+  
+    id: '3d-model',
+    type: 'custom',
+    renderingMode: '3d',
+  
+    onAdd: function () {
+      const ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath( './' );
+      ifcLoader.load( './04.ifc', function ( model ) {
+        scene.add( model );
+      });
+  
+      const directionalLight = new DirectionalLight(0x404040);
+      const directionalLight2 = new DirectionalLight(0x404040);
+      const ambientLight = new AmbientLight( 0x404040, 3 );
+  
+      directionalLight.position.set(0, -70, 100).normalize();
+      directionalLight2.position.set(0, 70, 100).normalize();
+  
+      scene.add(directionalLight, directionalLight2, ambientLight);
+  },
+  
+    render: function (gl, matrix) {
+      const rotationX = new Matrix4().makeRotationAxis(
+      new Vector3(1, 0, 0), modelTransform.rotateX);
+      const rotationY = new Matrix4().makeRotationAxis(
+      new Vector3(0, 1, 0), modelTransform.rotateY);
+      const rotationZ = new Matrix4().makeRotationAxis(
+      new Vector3(0, 0, 1), modelTransform.rotateZ);
+    
+      const m = new Matrix4().fromArray(matrix);
+      const l = new Matrix4()
+      .makeTranslation(
+      modelTransform.translateX,
+      modelTransform.translateY,
+      modelTransform.translateZ
+      )
+      .scale(
+      new Vector3(
+      modelTransform.scale,
+      -modelTransform.scale,
+      modelTransform.scale)
+      )
+      .multiply(rotationX)
+      .multiply(rotationY)
+      .multiply(rotationZ);
+      
+      camera.projectionMatrix = m.multiply(l);
+      renderer.resetState();
+      renderer.render(scene, camera);
+      map.triggerRepaint();
+    }
+  };
+   
+  map.on('style.load', () => {
+    map.addLayer(customLayer, 'waterway-label');
+  });
+  
+  map.on('load', () => {
+  // Insert the layer beneath any symbol layer.
+    const layers = map.getStyle().layers;
+    const labelLayerId = layers.find(
+        (layer) => layer.type === 'symbol' && layer.layout['text-field']
+    ).id;
+  
+  // The 'building' layer in the Mapbox Streets
+  // vector tileset contains building height data
+  // from OpenStreetMap.
+    map.addLayer(
+        {
+          'id': 'add-3d-buildings',
+          'source': 'composite',
+          'source-layer': 'building',
+          'filter': ['==', 'extrude', 'true'],
+          'type': 'fill-extrusion',
+          'minzoom': 15,
+          'paint': {
+            'fill-extrusion-color': '#aaa',
+  
+            // Use an 'interpolate' expression to
+            // add a smooth transition effect to
+            // the buildings as the user zooms in.
+            'fill-extrusion-height': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              15,
+              0,
+              15.05,
+              ['get', 'height']
+            ],
+            'fill-extrusion-base': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              15,
+              0,
+              15.05,
+              ['get', 'min_height']
+            ],
+            'fill-extrusion-opacity': 0.6
+          }
+        },
+        labelLayerId
+    );
+  });

@@ -8,26 +8,11 @@ html, body {
     overflow: hidden;
 }
 
-#three-canvas{
-    position: fixed;
+#map {
+    position: absolute;
     top: 0;
     left: 0;
-    outline: none;
-}
-
-#button-container {
-    display: flex;
-    flex-direction: column;
-    margin: 4rem 1rem;
-}
-
-#file-input {
-    z-index: 1;
-
-}
-
-#memory-button {
-    width: 8rem;
-    margin-top: 1rem;
-    z-index: 1;
-}
+    width: 100%;
+    height: 100%;
+  }
+  
