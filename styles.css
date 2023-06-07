@@ -26,6 +26,14 @@ input {
 .button-container button {
     margin: 0.5rem;
     padding: 8px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 5px;
+    cursor: grab;
+}
+
+.button-container button:hover {
+    cursor: grabbing;
 }
 
 #viewer-container {
